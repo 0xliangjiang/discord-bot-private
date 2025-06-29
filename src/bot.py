@@ -52,8 +52,8 @@ class DiscordBot:
         self.running = False
         self.thread_id = threading.current_thread().ident
         
-        # 初始化聊天历史管理器，传递当前账户的白名单
-        self.chat_history = ChatHistoryManager(self.channel_id, self.whitelist_users)
+        # 初始化聊天历史管理器，传递当前账户的白名单和bot名称
+        self.chat_history = ChatHistoryManager(self.channel_id, self.whitelist_users, self.name)
         
         # 初始化关键词管理器
         self.keyword_manager = KeywordManager(Config.KEYWORD_RESPONSES_PATH)
@@ -714,7 +714,7 @@ class MultiAccountBotManager:
         data_dir = "data"
         try:
             if os.path.exists(data_dir):
-                # 获取所有聊天记录文件
+                # 获取所有聊天记录文件（包括新的命名格式）
                 chat_files = glob.glob(os.path.join(data_dir, "chat_history_*.json"))
                 
                 if chat_files:

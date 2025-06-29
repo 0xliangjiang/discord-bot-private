@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Bot 配置管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .account-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .account-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .account-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .whitelist-container {
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        .whitelist-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .whitelist-item input {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .backup-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            background: white;
+        }
+
+        .backup-info {
+            flex: 1;
+        }
+
+        .backup-filename {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .backup-meta {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .env-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .env-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .env-item input {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .env-key {
+            flex: 1;
+        }
+
+        .env-value {
+            flex: 2;
+        }
+
+        .env-comment {
+            flex: 2;
+        }
+
+        .env-row {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 15px;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .env-main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .env-comment-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .env-comment-row input {
+            flex: 1;
+        }
+
+        .env-comment-label {
+            font-size: 12px;
+            color: #666;
+            min-width: 60px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .icon {
+            font-size: 1.2em;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                margin: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Discord Bot 配置管理</h1>
+            <p>管理多个Discord机器人账户的配置和白名单</p>
+        </div>
+
+        <div class="content">
+            <div id="message" class="alert" style="display: none;"></div>
+
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="icon">⚙️</span>
+                    环境变量配置 (.env)
+                </h2>
+                <div id="env-container">
+                    <div class="loading">正在加载环境变量...</div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="addEnvVar()">
+                        <span class="icon">➕</span>
+                        添加环境变量
+                    </button>
+                    <button class="btn btn-success" onclick="saveEnv()">
+                        <span class="icon">💾</span>
+                        保存环境变量
+                    </button>
+                    <button class="btn btn-secondary" onclick="loadEnv()">
+                        <span class="icon">🔄</span>
+                        重新加载
+                    </button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="icon">🤖</span>
+                    机器人账户配置
+                </h2>
+                <div id="accounts-container">
+                    <div class="loading">正在加载配置...</div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="addAccount()">
+                        <span class="icon">➕</span>
+                        添加新账户
+                    </button>
+                    <button class="btn btn-success" onclick="saveConfig()">
+                        <span class="icon">💾</span>
+                        保存配置
+                    </button>
+                    <button class="btn btn-secondary" onclick="loadConfig()">
+                        <span class="icon">🔄</span>
+                        重新加载
+                    </button>
+                </div>
+            </div>
+
+            <div class="backup-section">
+                <h2 class="section-title">
+                    <span class="icon">📦</span>
+                    配置备份管理
+                </h2>
+                <div id="backups-container">
+                    <div class="loading">正在加载备份列表...</div>
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <button class="btn btn-secondary" onclick="loadBackups()">
+                        <span class="icon">🔄</span>
+                        刷新备份列表
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let accounts = [];
+        let accountIdCounter = 0;
+
+        let envVars = {};
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadEnv();
+            loadConfig();
+            loadBackups();
+        });
+
+        // 显示消息
+        function showMessage(message, type = 'success') {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = message;
+            messageEl.className = `alert alert-${type}`;
+            messageEl.style.display = 'block';
+            
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 5000);
+        }
+
+        // 加载配置
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/accounts');
+                if (response.ok) {
+                    accounts = await response.json();
+                    renderAccounts();
+                } else {
+                    showMessage('加载配置失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+
+        // 渲染账户列表
+        function renderAccounts() {
+            const container = document.getElementById('accounts-container');
+            
+            if (accounts.length === 0) {
+                container.innerHTML = '<div class="loading">暂无配置，点击"添加新账户"开始配置</div>';
+                return;
+            }
+
+            container.innerHTML = accounts.map((account, index) => `
+                <div class="account-card" data-index="${index}">
+                    <div class="account-header">
+                        <div class="account-title">账户 ${index + 1}: ${account.name || '未命名'}</div>
+                        <button class="btn btn-danger btn-small" onclick="removeAccount(${index})">
+                            <span class="icon">🗑️</span>
+                            删除
+                        </button>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>机器人名称</label>
+                            <input type="text" placeholder="例如: jinyue_king" 
+                                   value="${account.name || ''}" 
+                                   onchange="updateAccount(${index}, 'name', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>频道ID</label>
+                            <input type="text" placeholder="例如: 1236263634091380843" 
+                                   value="${account.channel_id || ''}" 
+                                   onchange="updateAccount(${index}, 'channel_id', this.value)">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Discord Token</label>
+                        <input type="text" placeholder="例如: MTIzNTgwNTY3MTc5OTI2MzI3NA..." 
+                               value="${account.token || ''}" 
+                               onchange="updateAccount(${index}, 'token', this.value)">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>白名单用户 (用户ID列表)</label>
+                        <div class="whitelist-container">
+                            <div id="whitelist-${index}">
+                                ${renderWhitelist(account.whitelist_users || [], index)}
+                            </div>
+                            <button class="btn btn-primary btn-small" onclick="addWhitelistUser(${index})">
+                                <span class="icon">➕</span>
+                                添加用户ID
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 渲染白名单用户列表
+        function renderWhitelist(whitelistUsers, accountIndex) {
+            if (whitelistUsers.length === 0) {
+                return '<div class="loading">暂无白名单用户</div>';
+            }
+            
+            return whitelistUsers.map((userId, userIndex) => `
+                <div class="whitelist-item">
+                    <input type="text" placeholder="用户ID" 
+                           value="${userId}" 
+                           onchange="updateWhitelistUser(${accountIndex}, ${userIndex}, this.value)">
+                    <button class="btn btn-danger btn-small" onclick="removeWhitelistUser(${accountIndex}, ${userIndex})">
+                        <span class="icon">🗑️</span>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // 更新账户信息
+        function updateAccount(index, field, value) {
+            if (accounts[index]) {
+                accounts[index][field] = value;
+            }
+        }
+
+        // 添加新账户
+        function addAccount() {
+            accounts.push({
+                token: '',
+                channel_id: '',
+                name: `bot_${Date.now()}`,
+                whitelist_users: []
+            });
+            renderAccounts();
+        }
+
+        // 删除账户
+        function removeAccount(index) {
+            if (confirm('确定要删除这个账户配置吗？')) {
+                accounts.splice(index, 1);
+                renderAccounts();
+            }
+        }
+
+        // 添加白名单用户
+        function addWhitelistUser(accountIndex) {
+            if (!accounts[accountIndex].whitelist_users) {
+                accounts[accountIndex].whitelist_users = [];
+            }
+            accounts[accountIndex].whitelist_users.push('');
+            renderAccounts();
+        }
+
+        // 更新白名单用户
+        function updateWhitelistUser(accountIndex, userIndex, value) {
+            if (accounts[accountIndex] && accounts[accountIndex].whitelist_users) {
+                accounts[accountIndex].whitelist_users[userIndex] = value;
+            }
+        }
+
+        // 删除白名单用户
+        function removeWhitelistUser(accountIndex, userIndex) {
+            if (accounts[accountIndex] && accounts[accountIndex].whitelist_users) {
+                accounts[accountIndex].whitelist_users.splice(userIndex, 1);
+                renderAccounts();
+            }
+        }
+
+        // 保存配置
+        async function saveConfig() {
+            try {
+                // 验证配置
+                for (let i = 0; i < accounts.length; i++) {
+                    const account = accounts[i];
+                    if (!account.token || !account.channel_id || !account.name) {
+                        showMessage(`账户 ${i + 1} 的配置不完整`, 'error');
+                        return;
+                    }
+                    // 过滤空的白名单用户ID
+                    account.whitelist_users = account.whitelist_users.filter(id => id.trim() !== '');
+                }
+
+                const response = await fetch('/api/accounts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(accounts)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showMessage(result.message, 'success');
+                    loadBackups(); // 刷新备份列表
+                } else {
+                    const error = await response.json();
+                    showMessage(error.error, 'error');
+                }
+            } catch (error) {
+                showMessage('保存失败: ' + error.message, 'error');
+            }
+        }
+
+        // 加载备份列表
+        async function loadBackups() {
+            try {
+                const response = await fetch('/api/backups');
+                if (response.ok) {
+                    const backups = await response.json();
+                    renderBackups(backups);
+                } else {
+                    document.getElementById('backups-container').innerHTML = '<div class="loading">加载备份列表失败</div>';
+                }
+            } catch (error) {
+                document.getElementById('backups-container').innerHTML = '<div class="loading">网络错误</div>';
+            }
+        }
+
+        // 渲染备份列表
+        function renderBackups(backups) {
+            const container = document.getElementById('backups-container');
+            
+            if (backups.length === 0) {
+                container.innerHTML = '<div class="loading">暂无备份文件</div>';
+                return;
+            }
+
+            container.innerHTML = backups.map(backup => `
+                <div class="backup-item">
+                    <div class="backup-info">
+                        <div class="backup-filename">${backup.filename}</div>
+                        <div class="backup-meta">
+                            修改时间: ${backup.modified} | 大小: ${(backup.size / 1024).toFixed(2)} KB
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-small" onclick="restoreBackup('${backup.filename}')">
+                        <span class="icon">🔄</span>
+                        恢复
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // 恢复备份
+        async function restoreBackup(filename) {
+            if (!confirm(`确定要恢复备份 "${filename}" 吗？当前配置将被覆盖。`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/restore/${filename}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showMessage(result.message, 'success');
+                    loadConfig(); // 重新加载配置
+                } else {
+                    const error = await response.json();
+                    showMessage(error.error, 'error');
+                }
+            } catch (error) {
+                showMessage('恢复失败: ' + error.message, 'error');
+            }
+        }
+
+        // 加载环境变量
+        async function loadEnv() {
+            try {
+                const response = await fetch('/api/env');
+                if (response.ok) {
+                    envVars = await response.json();
+                    renderEnvVars();
+                } else {
+                    showMessage('加载环境变量失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            }
+        }
+
+        // 渲染环境变量
+        function renderEnvVars() {
+            const container = document.getElementById('env-container');
+            
+            if (Object.keys(envVars).length === 0) {
+                container.innerHTML = '<div class="env-card"><div class="loading">暂无环境变量，点击"添加环境变量"开始配置</div></div>';
+                return;
+            }
+
+            const envItems = Object.entries(envVars).map(([key, data], index) => {
+                // 兼容新旧格式
+                const value = typeof data === 'object' ? data.value : data;
+                const comment = typeof data === 'object' ? data.comment : '';
+                
+                return `
+                    <div class="env-row">
+                        <div class="env-main">
+                            <input type="text" placeholder="变量名" class="env-key" 
+                                   value="${key}" 
+                                   onchange="updateEnvVar('${key}', this.value, 'key')">
+                            <input type="text" placeholder="变量值" class="env-value" 
+                                   value="${value}" 
+                                   onchange="updateEnvVar('${key}', this.value, 'value')">
+                            <button class="btn btn-danger btn-small" onclick="removeEnvVar('${key}')">
+                                <span class="icon">🗑️</span>
+                            </button>
+                        </div>
+                        <div class="env-comment-row">
+                            <span class="env-comment-label">中文注释:</span>
+                            <input type="text" placeholder="为这个环境变量添加中文说明..." class="env-comment" 
+                                   value="${comment}" 
+                                   onchange="updateEnvVar('${key}', this.value, 'comment')">
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="env-card">
+                    <h3 style="margin-bottom: 15px; color: #495057;">环境变量列表</h3>
+                    ${envItems}
+                </div>
+            `;
+        }
+
+        // 更新环境变量
+        function updateEnvVar(key, newValue, type) {
+            if (!envVars[key]) {
+                envVars[key] = { value: '', comment: '' };
+            }
+            
+            if (type === 'key') {
+                // 更新键名
+                if (newValue !== key) {
+                    const oldData = envVars[key];
+                    delete envVars[key];
+                    envVars[newValue] = oldData;
+                    renderEnvVars();
+                }
+            } else if (type === 'value') {
+                // 更新值
+                if (typeof envVars[key] === 'object') {
+                    envVars[key].value = newValue;
+                } else {
+                    envVars[key] = { value: newValue, comment: '' };
+                }
+            } else if (type === 'comment') {
+                // 更新注释
+                if (typeof envVars[key] === 'object') {
+                    envVars[key].comment = newValue;
+                } else {
+                    envVars[key] = { value: envVars[key] || '', comment: newValue };
+                }
+            }
+        }
+
+        // 添加环境变量
+        function addEnvVar() {
+            const newKey = `NEW_VAR_${Date.now()}`;
+            envVars[newKey] = { value: '', comment: '' };
+            renderEnvVars();
+        }
+
+        // 删除环境变量
+        function removeEnvVar(key) {
+            if (confirm(`确定要删除环境变量 "${key}" 吗？`)) {
+                delete envVars[key];
+                renderEnvVars();
+            }
+        }
+
+        // 保存环境变量
+        async function saveEnv() {
+            try {
+                // 过滤空的环境变量
+                const filteredEnvVars = {};
+                for (const [key, data] of Object.entries(envVars)) {
+                    const trimmedKey = key.trim();
+                    if (trimmedKey !== '') {
+                        if (typeof data === 'object') {
+                            const trimmedValue = data.value ? data.value.trim() : '';
+                            const trimmedComment = data.comment ? data.comment.trim() : '';
+                            if (trimmedValue !== '' || trimmedComment !== '') {
+                                filteredEnvVars[trimmedKey] = {
+                                    value: trimmedValue,
+                                    comment: trimmedComment
+                                };
+                            }
+                        } else {
+                            // 兼容旧格式
+                            const trimmedValue = data.trim();
+                            if (trimmedValue !== '') {
+                                filteredEnvVars[trimmedKey] = {
+                                    value: trimmedValue,
+                                    comment: ''
+                                };
+                            }
+                        }
+                    }
+                }
+
+                const response = await fetch('/api/env', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(filteredEnvVars)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showMessage(result.message, 'success');
+                    envVars = filteredEnvVars;
+                    renderEnvVars();
+                } else {
+                    const error = await response.json();
+                    showMessage(error.error, 'error');
+                }
+            } catch (error) {
+                showMessage('保存失败: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

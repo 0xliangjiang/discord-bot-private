@@ -1,6 +1,7 @@
 import json
 import os
 import logging
+import threading
 from datetime import datetime
 from typing import Dict, List, Optional
 from config import Config
@@ -10,14 +11,17 @@ logger = logging.getLogger(__name__)
 class ChatHistoryManager:
     """聊天记录管理器"""
     
-    def __init__(self, channel_id: str, whitelist_users: List[str] = None):
+    def __init__(self, channel_id: str, whitelist_users: List[str] = None, bot_name: str = None):
         self.channel_id = channel_id
-        self.history_file = f"data/chat_history_{channel_id}.json"
+        self.bot_name = bot_name or "default"
+        # 使用bot名称作为文件名的一部分，避免多线程冲突
+        self.history_file = f"data/chat_history_{self.bot_name}_{channel_id}.json"
         self.chat_history = {}
         self.whitelist_users = whitelist_users or []
         self.enable_whitelist = Config.ENABLE_WHITELIST_MODE
         self.max_length = Config.CHAT_HISTORY_MAX_LENGTH
         self.last_processed_messages = {}  # 记录每个用户最后处理的消息
+        self._file_lock = threading.Lock()  # 文件读写锁
         
         # 确保数据目录存在
         os.makedirs("data", exist_ok=True)
@@ -26,43 +30,45 @@ class ChatHistoryManager:
         self.load_history()
     
     def load_history(self):
-        """加载聊天历史记录"""
-        try:
-            if os.path.exists(self.history_file):
-                with open(self.history_file, 'r', encoding='utf-8') as f:
-                    self.chat_history = json.load(f)
-                
-                # 转换list为set以便快速查找
-                for user_id, data in self.chat_history.items():
-                    if 'processed_message_ids' in data:
-                        data['processed_message_ids'] = set(data['processed_message_ids'])
-                    else:
-                        data['processed_message_ids'] = set()
-                
-                logger.info(f"加载聊天历史记录: {len(self.chat_history)} 个用户")
-            else:
+        """加载聊天历史记录（线程安全）"""
+        with self._file_lock:
+            try:
+                if os.path.exists(self.history_file):
+                    with open(self.history_file, 'r', encoding='utf-8') as f:
+                        self.chat_history = json.load(f)
+                    
+                    # 转换list为set以便快速查找
+                    for user_id, data in self.chat_history.items():
+                        if 'processed_message_ids' in data:
+                            data['processed_message_ids'] = set(data['processed_message_ids'])
+                        else:
+                            data['processed_message_ids'] = set()
+                    
+                    logger.info(f"[{self.bot_name}] 加载聊天历史记录: {len(self.chat_history)} 个用户")
+                else:
+                    self.chat_history = {}
+            except Exception as e:
+                logger.error(f"[{self.bot_name}] 加载聊天历史记录失败: {e}")
                 self.chat_history = {}
-        except Exception as e:
-            logger.error(f"加载聊天历史记录失败: {e}")
-            self.chat_history = {}
     
     def save_history(self):
-        """保存聊天历史记录"""
-        try:
-            # 转换set为list以便JSON序列化
-            history_to_save = {}
-            for user_id, data in self.chat_history.items():
-                history_to_save[user_id] = {
-                    'username': data['username'],
-                    'conversations': data['conversations']
-                }
-                if 'processed_message_ids' in data:
-                    history_to_save[user_id]['processed_message_ids'] = list(data['processed_message_ids'])
-            
-            with open(self.history_file, 'w', encoding='utf-8') as f:
-                json.dump(history_to_save, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"保存聊天历史记录失败: {e}")
+        """保存聊天历史记录（线程安全）"""
+        with self._file_lock:
+            try:
+                # 转换set为list以便JSON序列化
+                history_to_save = {}
+                for user_id, data in self.chat_history.items():
+                    history_to_save[user_id] = {
+                        'username': data['username'],
+                        'conversations': data['conversations']
+                    }
+                    if 'processed_message_ids' in data:
+                        history_to_save[user_id]['processed_message_ids'] = list(data['processed_message_ids'])
+                
+                with open(self.history_file, 'w', encoding='utf-8') as f:
+                    json.dump(history_to_save, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.error(f"[{self.bot_name}] 保存聊天历史记录失败: {e}")
     
     def is_whitelisted_user(self, user_id: str) -> bool:
         """检查用户是否在白名单中"""
@@ -140,7 +146,7 @@ class ChatHistoryManager:
             self.chat_history[user_id]['processed_message_ids'] = set(ids_list[-500:])
         
         self.save_history()
-        logger.info(f"保存用户消息: {username}({user_id}): {message}")
+        logger.info(f"[{self.bot_name}] 保存用户消息: {username}({user_id}): {message}")
         return True
     
     def add_bot_reply(self, user_id: str, reply: str):
@@ -169,7 +175,7 @@ class ChatHistoryManager:
                 self.chat_history[user_id]['conversations'][-self.max_length:]
         
         self.save_history()
-        logger.info(f"保存机器人回复给用户 {user_id}: {reply}")
+        logger.info(f"[{self.bot_name}] 保存机器人回复给用户 {user_id}: {reply}")
     
     def get_user_history(self, user_id: str, limit: int = 10) -> List[Dict]:
         """获取用户的聊天历史"""
@@ -239,13 +245,13 @@ class ChatHistoryManager:
         if user_id in self.chat_history:
             del self.chat_history[user_id]
             self.save_history()
-            logger.info(f"已清除用户 {user_id} 的聊天历史")
+            logger.info(f"[{self.bot_name}] 已清除用户 {user_id} 的聊天历史")
     
     def clear_all_history(self):
         """清除所有聊天历史"""
         self.chat_history = {}
         self.save_history()
-        logger.info("已清除所有聊天历史")
+        logger.info(f"[{self.bot_name}] 已清除所有聊天历史")
     
     def remove_duplicate_messages(self):
         """清理重复的消息记录"""
@@ -273,8 +279,8 @@ class ChatHistoryManager:
         
         if cleaned_count > 0:
             self.save_history()
-            logger.info(f"清理完成，移除了 {cleaned_count} 条重复消息")
+            logger.info(f"[{self.bot_name}] 清理完成，移除了 {cleaned_count} 条重复消息")
             return cleaned_count
         else:
-            logger.info("没有发现重复消息")
+            logger.info(f"[{self.bot_name}] 没有发现重复消息")
             return 0
