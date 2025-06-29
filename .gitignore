@@ -4,7 +4,6 @@ accounts.json
 
 # 构建文件
 build/
-dist/
 *.spec
 
 # Python缓存

@@ -1,0 +1,32 @@
+{
+  "description": "关键词自动回复词库配置",
+  "rules": {
+    "exact_match": {
+      "description": "精确匹配 - 用户消息完全匹配时触发",
+      "responses": {
+        "yyds": ["确实", "永远滴神", "yyds"]
+      }
+    },
+    "contains_match": {
+      "description": "包含匹配 - 用户消息包含关键词时触发",
+      "responses": {
+        "富婆": ["想得美", "梦想挺好", "醒醒吧兄弟", "富婆在哪", "我也想找"],
+        "工作": ["上班族", "搬砖去", "工作辛苦", "摸鱼时间"]
+      }
+    },
+    "regex_match": {
+      "description": "正则匹配 - 支持复杂匹配模式",
+      "responses": {
+        "价格|价位|多少钱": ["不清楚", "看行情", "自己dyor", "价格变化快"],
+        "买|卖|交易": ["dyor", "自己判断", "风险自负", "谨慎投资"],
+        "推荐|建议": ["自己研究", "不是财务建议", "dyor", "风险自负"]
+      }
+    }
+  },
+  "settings": {
+    "enable_keyword_responses": true,
+    "match_priority": ["exact_match", "contains_match", "regex_match"],
+    "random_response": true,
+    "fallback_to_ai": true
+  }
+}
