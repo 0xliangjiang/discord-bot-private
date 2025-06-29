@@ -36,6 +36,9 @@ class DiscordBot:
         self.channel_id = account_info['channel_id']
         self.name = account_info.get('name', f'账号_{self.channel_id[-4:]}')
         
+        # 当前账户的白名单配置
+        self.whitelist_users = account_info.get('whitelist_users', [])
+        
         # 公共配置
         self.ai_api_key = Config.AI_API_KEY
         self.ai_api_url = Config.AI_API_URL
@@ -49,8 +52,8 @@ class DiscordBot:
         self.running = False
         self.thread_id = threading.current_thread().ident
         
-        # 初始化聊天历史管理器
-        self.chat_history = ChatHistoryManager(self.channel_id)
+        # 初始化聊天历史管理器，传递当前账户的白名单
+        self.chat_history = ChatHistoryManager(self.channel_id, self.whitelist_users)
         
         # 初始化关键词管理器
         self.keyword_manager = KeywordManager(Config.KEYWORD_RESPONSES_PATH)
@@ -74,6 +77,9 @@ class DiscordBot:
         self.bot_user_id = None
         self.bot_username = None
         self._get_bot_user_info()
+        
+        # 打印当前账户的白名单配置
+        logger.info(f"[{self.name}] 白名单用户: {self.whitelist_users}")
     
     def _get_bot_user_info(self):
         """获取当前机器人的用户信息"""

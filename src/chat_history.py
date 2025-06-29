@@ -10,11 +10,11 @@ logger = logging.getLogger(__name__)
 class ChatHistoryManager:
     """聊天记录管理器"""
     
-    def __init__(self, channel_id: str):
+    def __init__(self, channel_id: str, whitelist_users: List[str] = None):
         self.channel_id = channel_id
         self.history_file = f"data/chat_history_{channel_id}.json"
         self.chat_history = {}
-        self.whitelist_users = Config.get_whitelist_users()
+        self.whitelist_users = whitelist_users or []
         self.enable_whitelist = Config.ENABLE_WHITELIST_MODE
         self.max_length = Config.CHAT_HISTORY_MAX_LENGTH
         self.last_processed_messages = {}  # 记录每个用户最后处理的消息
