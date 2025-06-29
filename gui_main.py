@@ -17,8 +17,8 @@ from PyQt6.QtWidgets import (
     QGroupBox, QFormLayout, QMessageBox, QSplitter, QFrame, QScrollArea,
     QFileDialog, QProgressBar, QStatusBar
 )
-from PyQt6.QtCore import QThread, pyqtSignal, QTimer, QSize
-from PyQt6.QtGui import QFont, QIcon, QPixmap, QTextCursor
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer, QSize, Qt, pyqtSlot
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QTextCursor, QAction
 import requests
 
 # 添加src目录到路径
@@ -43,7 +43,7 @@ class LogHandler(logging.Handler):
     def emit(self, record):
         try:
             msg = self.format(record)
-            # 使用信号安全地更新GUI
+            # 直接调用append_log方法（已经是线程安全的）
             if hasattr(self.text_widget, 'append_log'):
                 self.text_widget.append_log(msg)
         except Exception:
@@ -96,11 +96,16 @@ class LogWidget(QTextEdit):
     def __init__(self):
         super().__init__()
         self.setReadOnly(True)
-        self.setMaximumBlockCount(1000)  # 限制最大行数
+        self.max_lines = 1000  # 手动限制最大行数
+        self.line_count = 0
         
         # 设置字体
-        font = QFont("Consolas", 9)
-        font.setFamily("Monaco")  # macOS
+        if sys.platform == "darwin":  # macOS
+            font = QFont("Monaco", 9)
+        elif sys.platform == "win32":  # Windows
+            font = QFont("Consolas", 9)
+        else:  # Linux
+            font = QFont("DejaVu Sans Mono", 9)
         self.setFont(font)
         
         # 设置样式
@@ -110,22 +115,57 @@ class LogWidget(QTextEdit):
                 color: #d4d4d4;
                 border: 1px solid #3e3e3e;
                 border-radius: 4px;
+                font-family: monospace;
             }
         """)
         
+    @pyqtSlot(str)
     def append_log(self, message):
-        """线程安全地添加日志"""
+        """线程安全地添加日志，自动滚动到底部"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_msg = f"[{timestamp}] {message}"
+        
+        # 检查行数限制
+        if self.line_count >= self.max_lines:
+            # 清除前面的行
+            cursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            cursor.movePosition(QTextCursor.MoveOperation.Down, QTextCursor.MoveMode.KeepAnchor, 100)
+            cursor.removeSelectedText()
+            self.line_count -= 100
         
         # 移动到末尾并添加文本
         cursor = self.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
         cursor.insertText(formatted_msg + "\n")
+        self.line_count += 1
         
-        # 自动滚动到底部
+        # 确保光标在文档末尾
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.setTextCursor(cursor)
+        
+        # 强制滚动到底部
         scrollbar = self.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+        
+        # 额外的滚动确保（有时需要处理延迟）
+        self.ensureCursorVisible()
+        
+        # 处理可能的渲染延迟
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(10, self.scroll_to_bottom)
+    
+    @pyqtSlot()
+    def scroll_to_bottom(self):
+        """确保滚动到底部的辅助方法"""
+        scrollbar = self.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+        
+        # 确保光标在末尾
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.setTextCursor(cursor)
+        self.ensureCursorVisible()
 
 class AccountConfigWidget(QWidget):
     """账户配置界面"""
@@ -240,7 +280,10 @@ class AccountConfigWidget(QWidget):
         
     def delete_account(self, row):
         """删除账户"""
-        reply = QMessageBox.question(self, "确认", "确定要删除这个账户吗？")
+        reply = QMessageBox.question(
+            self, "确认", "确定要删除这个账户吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         if reply == QMessageBox.StandardButton.Yes:
             self.table.removeRow(row)
             self.refresh_table()
@@ -282,7 +325,11 @@ class ConfigWidget(QWidget):
         ai_layout = QFormLayout()
         
         self.ai_api_key = QLineEdit()
-        self.ai_api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        try:
+            self.ai_api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        except AttributeError:
+            # PyQt6早期版本兼容性
+            self.ai_api_key.setEchoMode(QLineEdit.Password)
         self.ai_api_url = QLineEdit()
         self.ai_model = QLineEdit()
         
@@ -353,7 +400,7 @@ class ConfigWidget(QWidget):
             # 这里可以从config.py或环境变量加载配置
             # 暂时使用默认值
             self.ai_api_url.setText("https://api.openai.com/v1/chat/completions")
-            self.ai_model.setText("gpt-3.5-turbo")
+            self.ai_model.setText("gpt-4o-mini")
             
         except Exception as e:
             QMessageBox.warning(self, "错误", f"加载配置失败: {str(e)}")
@@ -386,6 +433,302 @@ class ConfigWidget(QWidget):
             
         except Exception as e:
             QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
+
+class KeywordConfigWidget(QWidget):
+    """关键词回复配置界面"""
+    
+    def __init__(self):
+        super().__init__()
+        self.keyword_data = {}
+        self.init_ui()
+        self.load_keywords()
+        
+    def init_ui(self):
+        layout = QVBoxLayout()
+        
+        # 顶部说明和按钮
+        info_layout = QHBoxLayout()
+        info_label = QLabel("配置关键词自动回复，支持精确匹配、包含匹配和正则匹配")
+        info_label.setStyleSheet("color: #666; font-size: 12px; margin: 5px;")
+        
+        self.save_btn = QPushButton("保存配置")
+        self.load_btn = QPushButton("重新加载")
+        self.save_btn.clicked.connect(self.save_keywords)
+        self.load_btn.clicked.connect(self.load_keywords)
+        
+        info_layout.addWidget(info_label)
+        info_layout.addStretch()
+        info_layout.addWidget(self.save_btn)
+        info_layout.addWidget(self.load_btn)
+        layout.addLayout(info_layout)
+        
+        # 创建滚动区域
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout()
+        
+        # 设置选项组
+        settings_group = QGroupBox("全局设置")
+        settings_layout = QFormLayout()
+        
+        self.enable_keywords = QCheckBox("启用关键词回复")
+        self.enable_keywords.setChecked(True)
+        
+        self.random_response = QCheckBox("随机选择回复")
+        self.random_response.setChecked(True)
+        
+        self.fallback_to_ai = QCheckBox("未匹配时使用AI回复")
+        self.fallback_to_ai.setChecked(True)
+        
+        settings_layout.addRow("", self.enable_keywords)
+        settings_layout.addRow("", self.random_response)
+        settings_layout.addRow("", self.fallback_to_ai)
+        settings_group.setLayout(settings_layout)
+        scroll_layout.addWidget(settings_group)
+        
+        # 精确匹配组
+        self.exact_group = self.create_match_group("精确匹配", "用户消息完全匹配关键词时触发")
+        scroll_layout.addWidget(self.exact_group)
+        
+        # 包含匹配组
+        self.contains_group = self.create_match_group("包含匹配", "用户消息包含关键词时触发")
+        scroll_layout.addWidget(self.contains_group)
+        
+        # 正则匹配组
+        self.regex_group = self.create_match_group("正则匹配", "支持复杂的正则表达式匹配")
+        scroll_layout.addWidget(self.regex_group)
+        
+        scroll_layout.addStretch()
+        scroll_widget.setLayout(scroll_layout)
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        self.setLayout(layout)
+    
+    def create_match_group(self, title, description):
+        """创建匹配规则组"""
+        group = QGroupBox(title)
+        layout = QVBoxLayout()
+        
+        # 描述标签
+        desc_label = QLabel(description)
+        desc_label.setStyleSheet("color: #666; font-size: 11px; margin-bottom: 10px;")
+        layout.addWidget(desc_label)
+        
+        # 添加按钮
+        add_btn = QPushButton(f"添加{title}规则")
+        add_btn.clicked.connect(lambda: self.add_keyword_rule(group, title.lower().replace('匹配', '_match')))
+        layout.addWidget(add_btn)
+        
+        # 规则容器
+        rules_widget = QWidget()
+        rules_layout = QVBoxLayout()
+        rules_widget.setLayout(rules_layout)
+        layout.addWidget(rules_widget)
+        
+        group.setLayout(layout)
+        
+        # 保存引用以便后续使用
+        setattr(group, 'rules_widget', rules_widget)
+        setattr(group, 'rules_layout', rules_layout)
+        
+        return group
+    
+    def add_keyword_rule(self, group, match_type):
+        """添加关键词规则"""
+        rules_layout = group.rules_layout
+        
+        # 创建规则框
+        rule_frame = QFrame()
+        rule_frame.setFrameStyle(QFrame.Shape.StyledPanel)
+        rule_frame.setStyleSheet("QFrame { border: 1px solid #ddd; border-radius: 4px; margin: 2px; }")
+        
+        rule_layout = QVBoxLayout()
+        
+        # 关键词输入行
+        keyword_layout = QHBoxLayout()
+        keyword_label = QLabel("关键词:")
+        keyword_input = QLineEdit()
+        keyword_input.setPlaceholderText("输入关键词或正则表达式")
+        
+        delete_btn = QPushButton("删除")
+        delete_btn.setMaximumWidth(60)
+        delete_btn.clicked.connect(lambda: self.delete_rule(rule_frame, rules_layout))
+        
+        keyword_layout.addWidget(keyword_label)
+        keyword_layout.addWidget(keyword_input)
+        keyword_layout.addWidget(delete_btn)
+        
+        # 回复列表
+        responses_label = QLabel("回复内容 (每行一个回复):")
+        responses_text = QTextEdit()
+        responses_text.setMaximumHeight(100)
+        responses_text.setPlaceholderText("输入回复内容，每行一个\n例如：\n你好\n哈喽\nhi")
+        
+        rule_layout.addLayout(keyword_layout)
+        rule_layout.addWidget(responses_label)
+        rule_layout.addWidget(responses_text)
+        
+        rule_frame.setLayout(rule_layout)
+        
+        # 保存组件引用
+        setattr(rule_frame, 'keyword_input', keyword_input)
+        setattr(rule_frame, 'responses_text', responses_text)
+        setattr(rule_frame, 'match_type', match_type)
+        
+        rules_layout.addWidget(rule_frame)
+    
+    def delete_rule(self, rule_frame, rules_layout):
+        """删除规则"""
+        reply = QMessageBox.question(
+            self, "确认", "确定要删除这条规则吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            rule_frame.setParent(None)
+            rule_frame.deleteLater()
+    
+    def load_keywords(self):
+        """加载关键词配置"""
+        try:
+            if os.path.exists("keyword_responses.json"):
+                with open("keyword_responses.json", 'r', encoding='utf-8') as f:
+                    self.keyword_data = json.load(f)
+            else:
+                # 创建默认配置
+                self.keyword_data = {
+                    "rules": {
+                        "exact_match": {"responses": {}},
+                        "contains_match": {"responses": {}},
+                        "regex_match": {"responses": {}}
+                    },
+                    "settings": {
+                        "enable_keyword_responses": True,
+                        "random_response": True,
+                        "fallback_to_ai": True
+                    }
+                }
+            
+            self.refresh_ui()
+            
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"加载关键词配置失败: {str(e)}")
+    
+    def refresh_ui(self):
+        """刷新界面显示"""
+        # 更新设置
+        settings = self.keyword_data.get("settings", {})
+        self.enable_keywords.setChecked(settings.get("enable_keyword_responses", True))
+        self.random_response.setChecked(settings.get("random_response", True))
+        self.fallback_to_ai.setChecked(settings.get("fallback_to_ai", True))
+        
+        # 清除现有规则
+        self.clear_rules()
+        
+        # 加载规则
+        rules = self.keyword_data.get("rules", {})
+        
+        # 精确匹配
+        exact_responses = rules.get("exact_match", {}).get("responses", {})
+        for keyword, responses in exact_responses.items():
+            self.add_keyword_rule(self.exact_group, "exact_match")
+            rule_frame = self.exact_group.rules_layout.itemAt(
+                self.exact_group.rules_layout.count() - 1
+            ).widget()
+            rule_frame.keyword_input.setText(keyword)
+            if isinstance(responses, list):
+                rule_frame.responses_text.setPlainText('\n'.join(responses))
+            else:
+                rule_frame.responses_text.setPlainText(str(responses))
+        
+        # 包含匹配
+        contains_responses = rules.get("contains_match", {}).get("responses", {})
+        for keyword, responses in contains_responses.items():
+            self.add_keyword_rule(self.contains_group, "contains_match")
+            rule_frame = self.contains_group.rules_layout.itemAt(
+                self.contains_group.rules_layout.count() - 1
+            ).widget()
+            rule_frame.keyword_input.setText(keyword)
+            if isinstance(responses, list):
+                rule_frame.responses_text.setPlainText('\n'.join(responses))
+            else:
+                rule_frame.responses_text.setPlainText(str(responses))
+        
+        # 正则匹配
+        regex_responses = rules.get("regex_match", {}).get("responses", {})
+        for keyword, responses in regex_responses.items():
+            self.add_keyword_rule(self.regex_group, "regex_match")
+            rule_frame = self.regex_group.rules_layout.itemAt(
+                self.regex_group.rules_layout.count() - 1
+            ).widget()
+            rule_frame.keyword_input.setText(keyword)
+            if isinstance(responses, list):
+                rule_frame.responses_text.setPlainText('\n'.join(responses))
+            else:
+                rule_frame.responses_text.setPlainText(str(responses))
+    
+    def clear_rules(self):
+        """清除所有规则显示"""
+        for group in [self.exact_group, self.contains_group, self.regex_group]:
+            layout = group.rules_layout
+            while layout.count():
+                child = layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+    
+    def save_keywords(self):
+        """保存关键词配置"""
+        try:
+            # 收集设置
+            settings = {
+                "enable_keyword_responses": self.enable_keywords.isChecked(),
+                "random_response": self.random_response.isChecked(),
+                "fallback_to_ai": self.fallback_to_ai.isChecked(),
+                "match_priority": ["exact_match", "contains_match", "regex_match"]
+            }
+            
+            # 收集规则
+            rules = {
+                "exact_match": {"description": "精确匹配", "responses": {}},
+                "contains_match": {"description": "包含匹配", "responses": {}},
+                "regex_match": {"description": "正则匹配", "responses": {}}
+            }
+            
+            # 收集各组的规则
+            for group_name, group in [
+                ("exact_match", self.exact_group),
+                ("contains_match", self.contains_group),
+                ("regex_match", self.regex_group)
+            ]:
+                layout = group.rules_layout
+                for i in range(layout.count()):
+                    rule_frame = layout.itemAt(i).widget()
+                    if rule_frame and hasattr(rule_frame, 'keyword_input'):
+                        keyword = rule_frame.keyword_input.text().strip()
+                        responses_text = rule_frame.responses_text.toPlainText().strip()
+                        
+                        if keyword and responses_text:
+                            # 分割回复内容
+                            responses = [r.strip() for r in responses_text.split('\n') if r.strip()]
+                            if responses:
+                                rules[group_name]["responses"][keyword] = responses
+            
+            # 构建最终配置
+            config_data = {
+                "description": "关键词自动回复词库配置",
+                "rules": rules,
+                "settings": settings
+            }
+            
+            # 保存到文件
+            with open("keyword_responses.json", 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, ensure_ascii=False, indent=2)
+            
+            QMessageBox.information(self, "成功", "关键词配置已保存")
+            
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"保存关键词配置失败: {str(e)}")
 
 class MainWindow(QMainWindow):
     """主窗口"""
@@ -424,6 +767,10 @@ class MainWindow(QMainWindow):
         # 通用配置页
         self.config_widget = ConfigWidget()
         tab_widget.addTab(self.config_widget, "通用配置")
+        
+        # 关键词回复配置页
+        self.keyword_config = KeywordConfigWidget()
+        tab_widget.addTab(self.keyword_config, "关键词回复")
         
         # 右侧日志区域
         log_frame = QFrame()
@@ -608,7 +955,10 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """关闭事件"""
         if self.bot_worker and self.bot_worker.isRunning():
-            reply = QMessageBox.question(self, "确认", "Bot正在运行，确定要退出吗？")
+            reply = QMessageBox.question(
+                self, "确认", "Bot正在运行，确定要退出吗？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
             if reply == QMessageBox.StandardButton.Yes:
                 self.stop_bot()
                 event.accept()

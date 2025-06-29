@@ -71,23 +71,31 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='DiscordBotManager',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,  # 设置为False隐藏控制台窗口
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico'  # 如果有图标文件的话
+    icon='icon.ico' if os.path.exists('icon.ico') else None
+)
+
+# 创建COLLECT来生成目录结构
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='DiscordBotManager'
 )
 '''
     
@@ -135,35 +143,109 @@ def copy_resources():
         return False
     
     # 寻找可执行文件目录
-    exe_dir = None
-    for item in dist_dir.iterdir():
-        if item.is_dir():
-            exe_dir = item
-            break
-    
-    if not exe_dir:
-        print("找不到可执行文件目录")
+    exe_dir = dist_dir / 'DiscordBotManager'
+    if not exe_dir.exists():
+        print(f"找不到可执行文件目录: {exe_dir}")
         return False
     
-    # 复制示例配置文件
-    files_to_copy = [
-        'accounts.json',
-        '.env',
-        'keyword_responses.json'
+    # 复制配置文件（如果不存在则创建默认）
+    config_files = {
+        'accounts.json': '[]',
+        '.env': '''# Discord Bot 配置文件
+AI_API_KEY=your_api_key_here
+AI_API_URL=https://api.openai.com/v1/chat/completions
+AI_MODEL=gpt-4o-mini
+REPLY_LANGUAGE=中文
+MESSAGE_LIMIT=50
+REPLY_DELAY_MIN=30
+REPLY_DELAY_MAX=60
+ENABLE_WHITELIST_MODE=true
+CHAT_HISTORY_MAX_LENGTH=50
+ENABLE_ACTIVITY_MONITOR=true
+ACTIVITY_CHECK_MINUTES=30
+MIN_ACTIVE_USERS=2
+CLEAR_DATA_ON_RESTART=false
+USE_CUSTOM_TEMPLATE_FOR_WHITELIST=false
+MAX_WORKERS=4
+''',
+        'keyword_responses.json': '''{
+  "description": "关键词自动回复词库配置",
+  "rules": {
+    "exact_match": {
+      "description": "精确匹配",
+      "responses": {
+        "你好": ["你好！", "嗨！", "哈喽"],
+        "再见": ["再见！", "拜拜", "下次见"]
+      }
+    },
+    "contains_match": {
+      "description": "包含匹配",
+      "responses": {
+        "工作": ["上班族", "搬砖去", "工作辛苦"],
+        "富婆": ["想得美", "梦想挺好", "醒醒吧兄弟"]
+      }
+    },
+    "regex_match": {
+      "description": "正则匹配",
+      "responses": {
+        "价格|价位|多少钱": ["不清楚", "看行情", "自己dyor"],
+        "买|卖|交易": ["dyor", "自己判断", "风险自负"]
+      }
+    }
+  },
+  "settings": {
+    "enable_keyword_responses": true,
+    "random_response": true,
+    "fallback_to_ai": true,
+    "match_priority": ["exact_match", "contains_match", "regex_match"]
+  }
+}'''
+    }
+    
+    for file_name, default_content in config_files.items():
+        dest_path = exe_dir / file_name
+        if os.path.exists(file_name):
+            # 复制现有文件
+            shutil.copy2(file_name, dest_path)
+            print(f"复制现有文件: {file_name} -> {dest_path}")
+        else:
+            # 创建默认文件
+            with open(dest_path, 'w', encoding='utf-8') as f:
+                f.write(default_content)
+            print(f"创建默认文件: {dest_path}")
+    
+    # 创建必要的目录并添加说明文件
+    dirs_to_create = {
+        'data': '聊天记录存储目录',
+        'logs': '运行日志存储目录', 
+        'config_backups': '配置文件备份目录'
+    }
+    
+    for dir_name, description in dirs_to_create.items():
+        dir_path = exe_dir / dir_name
+        dir_path.mkdir(exist_ok=True)
+        
+        # 创建目录说明文件
+        readme_path = dir_path / 'README.txt'
+        with open(readme_path, 'w', encoding='utf-8') as f:
+            f.write(f"{description}\n")
+            f.write(f"此目录由Discord Bot Manager自动创建\n")
+            f.write(f"请勿手动删除此目录\n")
+        
+        print(f"创建目录: {dir_path} - {description}")
+    
+    # 复制其他资源文件
+    other_files = [
+        'GUI_使用说明.md',
+        '关键词配置功能说明.md',
+        '日志滚动改进说明.md'
     ]
     
-    for file_name in files_to_copy:
+    for file_name in other_files:
         if os.path.exists(file_name):
             dest_path = exe_dir / file_name
             shutil.copy2(file_name, dest_path)
-            print(f"复制文件: {file_name} -> {dest_path}")
-    
-    # 创建必要的目录
-    dirs_to_create = ['data', 'logs', 'config_backups']
-    for dir_name in dirs_to_create:
-        dir_path = exe_dir / dir_name
-        dir_path.mkdir(exist_ok=True)
-        print(f"创建目录: {dir_path}")
+            print(f"复制说明文件: {file_name} -> {dest_path}")
     
     return True
 
